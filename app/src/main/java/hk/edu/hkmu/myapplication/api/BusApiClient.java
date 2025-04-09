@@ -29,6 +29,8 @@ import hk.edu.hkmu.myapplication.model.RouteEta;
  * 巴士API客戶端類
  * 用於處理與九巴API的通信
  */
+
+//jnnnbbn
 public class BusApiClient {
     private static final String TAG = "BusApiClient";
     private static final String BASE_URL = "https://data.etabus.gov.hk/v1/transport/kmb/";
@@ -60,13 +62,13 @@ public class BusApiClient {
     /**
      * 獲取指定路線的預計到達時間
      */
-    public void getRouteEta(String routeId, String direction, String serviceType, final ApiCallback<List<RouteEta>> callback) {
+    public void getRouteEta(String stopId, String routeId, String serviceType, final ApiCallback<List<RouteEta>> callback) {
         executorService.execute(() -> {
             try {
-                String etaUrl = BASE_URL + "eta/" + routeId + "/" + direction + "/" + serviceType;
+                String etaUrl = BASE_URL + "eta/" + stopId + "/" + routeId + "/" + serviceType;
                 String jsonData = fetchData(etaUrl);
-                List<RouteEta> etaList = parseEta(jsonData);
-                
+                List<RouteEta> etaList = parseRouteEta(jsonData, stopId);
+
                 mainHandler.post(() -> callback.onSuccess(etaList));
             } catch (Exception e) {
                 Log.e(TAG, "Error getting ETA", e);
@@ -450,6 +452,38 @@ public class BusApiClient {
         
         return routes;
     }
+
+    private List<RouteEta> parseRouteEta(String jsonData, String stopId) throws JSONException {
+        List<RouteEta> etaList = new ArrayList<>();
+        JSONObject jsonObject = new JSONObject(jsonData);
+
+        if (jsonObject.has("data") && !jsonObject.isNull("data")) {
+            JSONArray dataArray = jsonObject.getJSONArray("data");
+            Log.d(TAG, "獲取到" + dataArray.length() + "個到站時間數據");
+
+            for (int i = 0; i < dataArray.length(); i++) {
+                JSONObject etaObject = dataArray.getJSONObject(i);
+
+                // 確保所有必需字段都存在
+                if (etaObject.has("route")) {
+                    String routeId = etaObject.getString("route");
+                    String direction = etaObject.optString("dir", "");
+                    String serviceType = etaObject.optString("service_type", "");
+                    String etaTime = etaObject.optString("eta", "");
+                    String remarkTC = etaObject.optString("rmk_tc", "");
+                    String remarkEN = etaObject.optString("rmk_en", "");
+
+                    RouteEta eta = new RouteEta(routeId, stopId, direction, serviceType, etaTime, remarkTC, remarkEN);
+                    Log.d(TAG, "解析到站時間: 路線=" + routeId + ", 站點=" + stopId + ", 時間=" + etaTime + ", 剩餘分鐘=" + eta.getMinutesRemaining());
+                    etaList.add(eta);
+                }
+            }
+        } else {
+            Log.e(TAG, "到站時間API沒有返回data字段: " + jsonData);
+        }
+
+        return etaList;
+    }
     
     /**
      * 解析ETA數據
@@ -562,7 +596,7 @@ public class BusApiClient {
      * API回調接口
      */
     public interface ApiCallback<T> {
-        void onSuccess(T result);
+        List<RouteEta> onSuccess(T result);
         void onError(String errorMessage);
     }
     

@@ -3,6 +3,7 @@ package hk.edu.hkmu.myapplication;
 import android.content.Context;
 import android.content.Intent;
 import android.os.Bundle;
+import android.util.Log;
 import android.view.Menu;
 import android.view.MenuItem;
 import android.view.View;
@@ -19,11 +20,13 @@ import androidx.swiperefreshlayout.widget.SwipeRefreshLayout;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
+import java.util.concurrent.CountDownLatch;
 
 import hk.edu.hkmu.myapplication.adapter.BusStopAdapter;
 import hk.edu.hkmu.myapplication.api.BusApiClient;
 import hk.edu.hkmu.myapplication.model.BusRoute;
 import hk.edu.hkmu.myapplication.model.BusStop;
+import hk.edu.hkmu.myapplication.model.RouteEta;
 import hk.edu.hkmu.myapplication.utils.FavoriteManager;
 import hk.edu.hkmu.myapplication.utils.FavoriteUtil;
 
@@ -221,6 +224,8 @@ public class RouteStopsActivity extends AppCompatActivity {
     }
     
 
+
+    /*
     private void loadRouteStops() {
         showLoading(true);
         
@@ -273,7 +278,69 @@ public class RouteStopsActivity extends AppCompatActivity {
             // 移除錯誤提示
             // 錯誤處理
         }
+    }*/
+
+    private void loadRouteStops() {
+        showLoading(true);
+        busApiClient.getRouteStopList(routeId, direction, serviceType, new BusApiClient.ApiCallback<List<BusStop>>() {
+            @Override
+            public List<RouteEta> onSuccess(List<BusStop> result) {
+                showLoading(false);
+                if (result.isEmpty()) {
+                    showNoStops(true);
+                } else {
+                    showNoStops(false);
+                    List<RouteEta> allEtas = new ArrayList<>();
+                    CountDownLatch latch = new CountDownLatch(result.size()); // Create a latch for the number of stops
+
+                    // Load ETA for each stop
+                    for (BusStop bus : result) {
+                        loadEtaForStop(bus.getStopId(), allEtas, latch);
+                    }
+
+                    // Wait for all ETA loads to finish
+                    new Thread(() -> {
+                        try {
+                            latch.await(); // Wait until all ETA requests are done
+                            runOnUiThread(() -> stopAdapter.updateData(result, allEtas)); // Update UI on the main thread
+                        } catch (InterruptedException e) {
+                            Log.e("RouteStopsActivity", "Error waiting for ETA loading", e);
+                        }
+                    }).start();
+                }//bb
+                return null;
+            }
+
+            @Override
+            public void onError(String errorMessage) {
+                showLoading(false);
+                Toast.makeText(RouteStopsActivity.this, errorMessage, Toast.LENGTH_SHORT).show();
+            }
+        });
     }
+
+    private void loadEtaForStop(String stopId, List<RouteEta> allEtas, CountDownLatch latch) {
+        busApiClient.getRouteEta(stopId, routeId, serviceType, new BusApiClient.ApiCallback<List<RouteEta>>() {
+            @Override
+            public List<RouteEta> onSuccess(List<RouteEta> etaList) {
+                if (etaList != null && !etaList.isEmpty()) {
+                    Log.d("RouteStopsActivity", "Received " + etaList.size() + " ETAs for stopId: " + stopId);
+                    allEtas.addAll(etaList);  // Collect all ETA data
+                } else {
+                    Log.d("RouteStopsActivity", "No ETA data for stopId: " + stopId);
+                }
+                latch.countDown(); // Signal that this ETA load is complete
+                return etaList;
+            }
+
+            @Override
+            public void onError(String errorMessage) {
+                Log.e("RouteStopsActivity", "Error loading ETA for stopId: " + stopId + ", error: " + errorMessage);
+                latch.countDown(); // Ensure latch is decremented even on error
+            }
+        });
+    }
+
     
     /**
      * 創建模拟巴士站點数据作为備用

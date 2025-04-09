@@ -4,6 +4,7 @@ import java.text.ParseException;
 import java.text.SimpleDateFormat;
 import java.util.Date;
 import java.util.Locale;
+import java.util.TimeZone;
 import java.util.concurrent.TimeUnit;
 
 /**
@@ -69,7 +70,9 @@ public class RouteEta {
     public String getRemark(boolean isEnglish) {
         return isEnglish ? remarkEN : remarkTC;
     }
-    
+
+
+    /*
     // 計算剩餘分鐘數
     private void calculateMinutesRemaining() {
         if (etaTime == null || etaTime.isEmpty()) {
@@ -124,5 +127,54 @@ public class RouteEta {
                 minutesRemaining = -1;
             }
         }
+    }*/
+
+    private void calculateMinutesRemaining() {
+        if (etaTime == null || etaTime.isEmpty()) {
+            minutesRemaining = -1;
+            return;
+        }
+
+        try {
+            minutesRemaining = calculateMinutes(etaTime, "yyyy-MM-dd'T'HH:mm:ssXXX");
+        } catch (ParseException e) {
+            // Attempt with a different format if the first fails
+            try {
+                minutesRemaining = calculateMinutes(etaTime, "yyyy-MM-dd'T'HH:mm:ss.SSSXXX");
+            } catch (ParseException e2) {
+                System.out.println("ETA時間格式無法解析: " + etaTime + ", 錯誤: " + e.getMessage());
+                minutesRemaining = -1;
+            }
+        }
     }
+
+    private long calculateMinutes(String etaTime, String format) throws ParseException {
+        SimpleDateFormat sdf = new SimpleDateFormat(format, Locale.US);
+        sdf.setTimeZone(TimeZone.getTimeZone("UTC")); // Set time zone to UTC
+        Date etaDate = sdf.parse(etaTime);
+        Date now = new Date();
+
+        // Debug logs
+        System.out.println("ETA計算: 路線=" + routeId + ", 站點=" + stopId +
+                ", 原始時間=" + etaTime +
+                ", 解析時間=" + etaDate +
+                ", 當前時間=" + now);
+
+        long diffInMillis = etaDate.getTime() - now.getTime();
+        long minutesRemaining = TimeUnit.MILLISECONDS.toMinutes(diffInMillis);
+
+        // Debug log
+        System.out.println("ETA計算結果: 毫秒差=" + diffInMillis + ", 分鐘差=" + minutesRemaining);
+
+        // Adjust for display purposes
+        if (minutesRemaining < -1) {
+            return -1; // Already passed
+        } else if (minutesRemaining < 0) {
+            return 0; // Arriving soon
+        }
+        return minutesRemaining;
+    }
+
+
+
 } 

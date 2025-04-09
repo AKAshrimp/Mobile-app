@@ -26,7 +26,6 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
-import java.util.Random;
 
 import hk.edu.hkmu.myapplication.api.BusApiClient;
 import hk.edu.hkmu.myapplication.model.BusRoute;
@@ -167,9 +166,10 @@ public class RouteDetailActivity extends AppCompatActivity {
         try {
             busApiClient.getRouteStops(routeId, direction, serviceType, new BusApiClient.ApiCallback<List<BusStop>>() {
                 @Override
-                public void onSuccess(List<BusStop> stops) {
+                public List<RouteEta> onSuccess(List<BusStop> stops) {
                     // 獲取到站點列表後，再獲取預計到達時間
                     loadEta(stops);
+                    return null;
                 }
                 
                 @Override
@@ -200,7 +200,7 @@ public class RouteDetailActivity extends AppCompatActivity {
     private void loadEta(List<BusStop> stops) {
         busApiClient.getRouteEta(routeId, direction, serviceType, new BusApiClient.ApiCallback<List<RouteEta>>() {
             @Override
-            public void onSuccess(List<RouteEta> etaList) {
+            public List<RouteEta> onSuccess(List<RouteEta> etaList) {
                 // 將ETA按站點ID分組
                 Map<String, List<RouteEta>> etaMap = new HashMap<>();
                 for (RouteEta eta : etaList) {
@@ -214,6 +214,7 @@ public class RouteDetailActivity extends AppCompatActivity {
                 // 更新適配器數據
                 stopAdapter.updateData(stops, etaMap);
                 swipeRefreshLayout.setRefreshing(false);
+                return etaList;
             }
             
             @Override
@@ -402,13 +403,13 @@ public class RouteDetailActivity extends AppCompatActivity {
             try {
                 busApiClient.getStopEta(routeId, stopId, new BusApiClient.ApiCallback<List<RouteEta>>() {
                     @Override
-                    public void onSuccess(List<RouteEta> etaList) {
+                    public List<RouteEta> onSuccess(List<RouteEta> etaList) {
                         Log.d("RouteDetailActivity", "獲取到站時間成功: stopId=" + stopId + ", 數量=" + (etaList != null ? etaList.size() : 0));
                         
                         // 更新到站時間顯示
                         if (etaList == null || etaList.isEmpty()) {
                             showNoEtaData(holder, context);
-                            return;
+                            return etaList;
                         }
                         
                         // 將到站時間按到達時間排序
@@ -446,6 +447,7 @@ public class RouteDetailActivity extends AppCompatActivity {
                                     break;
                             }
                         }
+                        return etaList;
                     }
                     
                     @Override
