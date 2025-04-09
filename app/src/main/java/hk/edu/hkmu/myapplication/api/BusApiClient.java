@@ -30,7 +30,7 @@ import hk.edu.hkmu.myapplication.model.RouteEta;
  * 用於處理與九巴API的通信
  */
 
-//jnnnbbn
+// :))
 public class BusApiClient {
     private static final String TAG = "BusApiClient";
     private static final String BASE_URL = "https://data.etabus.gov.hk/v1/transport/kmb/";
